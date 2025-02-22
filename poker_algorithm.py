@@ -15,9 +15,9 @@ LIMIT 100;
 df = pd.read_sql_query(query, conn)
 conn.close()
 
-# **处理 NaN 数据，防止 apply() 报错**
-df["mvrv"].fillna(2, inplace=True)  # 默认 MVRV = 2
-df["nupl"].fillna(0.5, inplace=True)  # 默认 NUPL = 0.5
+# **处理 NaN 数据**
+df["mvrv"] = df["mvrv"].fillna(2)  # 默认 MVRV = 2
+df["nupl"] = df["nupl"].fillna(0.5)  # 默认 NUPL = 0.5
 
 # **计算 MVRV 变量**
 def normalize_mvrv(mvrv):
@@ -70,12 +70,30 @@ def random_news_impact():
 
 df["news_impact"] = df["timestamp"].apply(lambda x: random_news_impact())
 
+# **分析变量趋势**
+def analyze_trend(x):
+    if len(x) < 2:
+        return 0  # 不足两条数据，不判断趋势
+    prev_value = x[-2]  # 直接用索引，而不是 .iloc
+    current_value = x[-1]
+    if prev_value < current_value:
+        return abs(current_value)  # 趋势向上，保留正数
+    elif prev_value > current_value:
+        return -abs(current_value)  # 趋势向下，变成负数
+    return 0  # 变量无变化
+
+df["mvrv_trend"] = df["mvrv_score"].rolling(2).apply(analyze_trend, raw=True)
+df["nupl_trend"] = df["nupl_score"].rolling(2).apply(analyze_trend, raw=True)
+df["tiv_trend"] = df["tiv_score"].rolling(2).apply(analyze_trend, raw=True)
+df["short_term_trend"] = df["short_term_trend"].rolling(2).apply(analyze_trend, raw=True)
+df["news_trend"] = df["news_impact"].rolling(2).apply(analyze_trend, raw=True)
+
 # **计算最终市场变量**
-df["final_value"] = df[["mvrv_score", "nupl_score", "tiv_score", "short_term_trend", "news_impact"]].mean(axis=1)
+df["final_value"] = df[["mvrv_trend", "nupl_trend", "tiv_trend", "short_term_trend", "news_trend"]].mean(axis=1)
 
 # **打印调试信息**
 print("✅ 计算后的市场变量：")
-print(df[["timestamp", "mvrv_score", "nupl_score", "tiv_score", "short_term_trend", "news_impact", "final_value"]].head())
+print(df[["timestamp", "mvrv_trend", "nupl_trend", "tiv_trend", "short_term_trend", "news_trend", "final_value"]].head())
 
 # **存储为 CSV**
 df.to_csv("market_variables.csv", index=False)
