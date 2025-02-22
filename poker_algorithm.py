@@ -1,5 +1,6 @@
 import sqlite3
 import pandas as pd
+import random
 
 # **连接 SQLite 数据库**
 conn = sqlite3.connect("crypto.db")
@@ -51,14 +52,31 @@ def normalize_tiv(price):
 
 df["tiv_score"] = df["price"].apply(normalize_tiv)
 
-# **计算最终价值变量**
-df["final_value"] = df[["mvrv_score", "nupl_score", "tiv_score"]].mean(axis=1)
+# **计算短期波动变量**
+def calculate_short_term_trend(prices):
+    highest = max(prices)
+    lowest = min(prices)
+    current = prices[-1]
+
+    # 计算短期涨跌幅
+    change = ((current - lowest) / (highest - lowest)) * 20 - 10
+    return max(-10, min(10, change))  # 限制范围 -10~10
+
+df["short_term_trend"] = df["price"].rolling(5).apply(lambda x: calculate_short_term_trend(x), raw=True)
+
+# **计算场外变量（随机模拟新闻影响，范围 -10~10）**
+def random_news_impact():
+    return random.uniform(-10, 10)  # 假设新闻影响随机变化
+
+df["news_impact"] = df["timestamp"].apply(lambda x: random_news_impact())
+
+# **计算最终市场变量**
+df["final_value"] = df[["mvrv_score", "nupl_score", "tiv_score", "short_term_trend", "news_impact"]].mean(axis=1)
 
 # **打印调试信息**
 print("✅ 计算后的市场变量：")
-print(df[["timestamp", "mvrv_score", "nupl_score", "tiv_score", "final_value"]].head())
+print(df[["timestamp", "mvrv_score", "nupl_score", "tiv_score", "short_term_trend", "news_impact", "final_value"]].head())
 
 # **存储为 CSV**
 df.to_csv("market_variables.csv", index=False)
 print("✅ 数据整合完成，已保存为 market_variables.csv")
-
